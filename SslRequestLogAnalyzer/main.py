@@ -1,19 +1,24 @@
 import os
 import re
 import targetaxedasn
+from datetime import datetime
 
 # global
 _main_path = ""
 _output_csv = []
 _logDictionary = {}
 
-_filepath = r"C:\Devs\TW\tw-cnn1\var\log\httpd\ssl_request_log-20250420"
-#_filepath = r"..\_data\ssl_request_log-20250420"
+#_filepath = r"C:\Users\ISeiy\Downloads\ssl_request_log-20250420\ssl_request_log-20250420"
+_filepath = r"..\_data\ssl_request_log-20250427"
 _outcsvpath = r"..\_out\ssl_request"
 _outcsvfile = "ssl_request.csv"
 _isTargetAll = False
 
-
+# 期間指定
+_isPeriod = True
+_fromPeriod = datetime.strptime("2025/4/23 00:00:00", "%Y/%m/%d %H:%M:%S")
+_toPeriod = datetime.strptime("2025/4/24 23:59:59", "%Y/%m/%d %H:%M:%S")
+_dic_month = {'Jan':1, 'Feb':2, 'Mar':3, 'Apr':4, 'May':5, 'Jun':6, 'Jul':7, 'Aug':8, 'Sep':9, 'Oct':10, 'Nov':11, 'Dec':12}
 
 # 正規表現
 #    _reg_sessionID_userID = re.compile(r'\[[0-9a-zA-Z]+\t[0-9a-zA-Z]+\]')
@@ -74,7 +79,37 @@ def getTargetAxedaSNParameters(line_str):
     
     return date, ip, axedasn, tls, cipher
 
+# 対応書式：01/Aug/2024:09:15:34
+def getDateObject(line):
+    try:
+        d0 = re.split('[/: ,]', line)
+        return datetime(
+            int(d0[2]),
+            _dic_month[d0[1]],
+            int(d0[0]),
+            int(d0[3]),
+            int(d0[4]),
+            int(d0[5])
+            )
+    except Exception as e:
+        print(f"except!!! {e} -> {line}")
 
+    return datetime(1900, 1, 1, 0, 0, 0, 0)
+
+def isPeriod(date):
+    #期間指定なし
+    if(_isPeriod == False):
+        return True
+    
+    #日付型に変換
+    obj_date = getDateObject(date)
+    
+    if(_fromPeriod <= obj_date <= _toPeriod):
+        return True
+    
+    return False
+    
+    
 def read_ssl_request_log():
     global _output_csv
 
@@ -92,7 +127,8 @@ def read_ssl_request_log():
             cp = cp + 1
             print(f"\033[A{cp}")
             if(isTargetAxedaSN(line)):
-                    date, ip, axedasn, tls, cipher = getTargetAxedaSNParameters(line)
+                date, ip, axedasn, tls, cipher = getTargetAxedaSNParameters(line)
+                if(isPeriod(date)):
                     if axedasn != "":
                         csv_string = f"{date},{ip},{axedasn},{tls},{cipher}"
                         try:
@@ -124,6 +160,16 @@ def read_ssl_request_log():
     print("終了しました")
 
 def main():
+    if(_isTargetAll):
+        print("全てのAxeda S/Nを探索します")
+    else:
+        print(f"{len(targetaxedasn._sms)}件のAxeda S/Nを探索します")
+    
+    if(_isPeriod):
+        print(f"期間指定あり：{_fromPeriod}～{_toPeriod}")
+    else:
+        print("期間指定なし")
+        
     read_ssl_request_log()
 
     
