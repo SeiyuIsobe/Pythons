@@ -3,21 +3,45 @@ import re
 import targetaxedasn
 from datetime import datetime
 
+#---------------------
+#      入力パラメータ
+#
+#解析目的のssl_request_log
+TARGET_ssl_request_log = r"C:\Devs\Axeda\tsvr1\var\log\httpd\ssl_request_log-20250511"
+#
+#解析対象は？　全て=True、絞る=False
+IS_TARGET_ALL = True
+#
+#結果出力先フォルダ
+OUTPUT_CSV_PATH = r"C:\Devs\Python\Output\SslRequestLogAnalyzer"
+#
+#結果出力先ファイル名
+OUTPUT_CSV_FILE = "ssl_request.csv"
+#
+#対象の期間は？　指定する=True、指定しない=False
+IS_PERIOD = False
+#
+#IS_PERIOD = Trueの場合
+#開始日時
+START_PERIOD_DATE = "2025/4/23 00:00:00"
+#終了日時
+END_PERIOD_DATE = "2025/4/24 23:59:59"
+#---------------------
+
 # global
 _main_path = ""
 _output_csv = []
 _logDictionary = {}
 
-#_filepath = r"C:\Users\ISeiy\Downloads\ssl_request_log-20250420\ssl_request_log-20250420"
-_filepath = r"..\_data\ssl_request_log-20250427"
-_outcsvpath = r"..\_out\ssl_request"
-_outcsvfile = "ssl_request.csv"
-_isTargetAll = False
+_filepath = TARGET_ssl_request_log
+_outcsvpath = OUTPUT_CSV_PATH
+_outcsvfile = OUTPUT_CSV_FILE
+_isTargetAll = IS_TARGET_ALL
 
 # 期間指定
-_isPeriod = True
-_fromPeriod = datetime.strptime("2025/4/23 00:00:00", "%Y/%m/%d %H:%M:%S")
-_toPeriod = datetime.strptime("2025/4/24 23:59:59", "%Y/%m/%d %H:%M:%S")
+_isPeriod = IS_PERIOD
+_fromPeriod = datetime.strptime(START_PERIOD_DATE, "%Y/%m/%d %H:%M:%S")
+_toPeriod = datetime.strptime(END_PERIOD_DATE, "%Y/%m/%d %H:%M:%S")
 _dic_month = {'Jan':1, 'Feb':2, 'Mar':3, 'Apr':4, 'May':5, 'Jun':6, 'Jul':7, 'Aug':8, 'Sep':9, 'Oct':10, 'Nov':11, 'Dec':12}
 
 # 正規表現
