@@ -14,13 +14,14 @@ import focal_map
 g_focallist_file = r"in\focallist.txt"
 #納入リストファイル
 g_devicelist_file = r"in\納入システム_10_utf-8.csv"
-#観測点リストファイル
-g_sonarlist_file = r"sonarpointlist.csv"
 #DB
 g_DB_devicelist_file = r"DB\db.csv"
 #結果
 g_devicechecklist_file = r"out\check_devices_list_sjis.csv"
 g_focallist_csv_file = r"out\focallist.csv"
+g_devicelist_error_file = r"out\納入システム_error_sjis.csv"
+#観測点リストファイル
+g_sonarlist_file = r"sonarpointlist.csv"
 #end---------入力パラメータ------------------------------------
 
 # ジオロケーターの初期化
@@ -78,7 +79,18 @@ def loading(init=False):
     g_loadcounter = g_loadcounter + 1
     return
 
-
+def writeDeviceListError(device):
+    #g_devicelist_error_fileを新規作成
+    if device == None:
+        with open(g_devicelist_error_file, "w", encoding="sjis") as f:
+            print("BS_ID,システム種別,システム名,システムSN,使用開始日,廃棄日,-,CC_ID,顧客名,設置室名,納入区分,-,通常デモダミーフラグ,サービス担当店,販売担当店（島津製作所）,販売担当店（島津MS/代理店）,販売担当店（MS卸）,国コード,国,都道府県,住所,顧客TEL,顧客FAX,顧客側担当者様1,顧客様TEL1,顧客側担当者様2,顧客様TEL2,FAX,E-Mail,サービス担当者,診療科・部署,備考,ユニットラベル貼付日,旧BS_ID,-,-,-,装置情報,-,保守,郵便番号", file=f)
+        return
+    
+    with open(g_devicelist_error_file, "a", encoding="sjis") as f:
+        s = ""
+        for v in device.values():
+            s = s + str(v) + ","
+        print(s[:-1], file=f)
 
 def writeLog(typestring, detail):
     dt = "{0:%Y/%m/%d %H:%M:%S}".format(date.today())
@@ -369,6 +381,9 @@ def UpdateDB(db, devices):
         #更新先のレコードに登録
         updaete_db.append(new_row)
 
+    #続いて納入リストのレコードをDBに登録
+    writeDeviceListError(None)  # エラー用ファイルを新規作成
+
     for dev in devices:
         i_row +=1
 
@@ -395,6 +410,7 @@ def UpdateDB(db, devices):
         time.sleep(1)  # リクエスト間に1秒待機
         if location_target == None:
             writeLog("ERROR", f"get_location({dev['郵便番号']}) -> 緯度、経度の取得に失敗しました：納入システム情報={s}")
+            writeDeviceListError(dev)
             continue 
         new_row.setdefault("郵便番号", postal_card)
         new_row.setdefault("緯度", location_target.latitude)
