@@ -19,11 +19,8 @@ pip install pandas
 #震源地リストファイル
 g_focallist_file = r"in\focallist.txt"
 #納入リストファイル
-g_devicelist_file = r"in\納入システム.csv"
-#g_devicelist_file = r"in\納入システム_utf-8.csv.error_不正郵便番号_sjis.csv"
-#g_devicelist_file = r"in\納入システム_1_utf-8.csv"
-#g_devicelist_file = r"in\納入システム_10.csv"
-#g_devicelist_file = r"in\納入システム_10.csv.error_不正郵便番号_sjis.csv"
+#g_devicelist_file = r"in\納入システム.csv"
+g_devicelist_file = r"in\納入システム.csv.error_不正郵便番号_sjis.csv"
 #DB
 g_DB_devicelist_file = r"DB\db.csv"
 #結果
@@ -427,6 +424,8 @@ def UpdateDB(db, devices):
         new_row = {}
 
         #納入リストに合致するレコードがないか確認
+        #キー
+        #  CC_ID, BS_ID
         d = searchTable(devices, "CC_ID", row['CC_ID'], "BS_ID", row['BS_ID'])
 
         #納入リストに無い　→　そのままコピー
@@ -446,28 +445,32 @@ def UpdateDB(db, devices):
             new_row.setdefault("CC_ID", row["CC_ID"])
             new_row.setdefault("BS_ID", row["BS_ID"])
 
-            #郵便番号に差異なし　→　同じ装置と判定、緯度経度はそのまま
+            #郵便番号は変更なし
             if row['郵便番号'] == d['郵便番号']:
                 new_row.setdefault("郵便番号", row["郵便番号"])
                 new_row.setdefault("緯度", row["緯度"])
                 new_row.setdefault("経度", row["経度"])
 
-            #差異あり　→　違う装置と判定、緯度経度は取り直し
+            #郵便番号は変更あり　→　違う装置と判定、緯度経度は取り直し
             else:
+                pass
+                """->
+                次の納入リストのループで登録する
                 if d['郵便番号'] == "":
                     writeDeviceListError(g_devicelist_error_no_postcord_file, dev)
                     continue
                 else:
                     #緯度、経度は取り直し
                     location_target, postal_card = get_location(d['郵便番号'])
-
                     if location_target == None:
+                        writeDeviceListError(g_devicelist_error_no_postcord_file, dev)
                         writeLog("ERROR", f"get_location({d['郵便番号']}) -> 緯度、経度の取得に失敗しました：納入システム情報={s}")
                         continue
                     new_row.setdefault("郵便番号", postal_card)
                     new_row.setdefault("緯度", location_target.latitude)
                     new_row.setdefault("経度", location_target.longitude)
-
+                <-"""
+                
             new_row.setdefault("Source", s)
         
         #更新先のレコードに登録
@@ -488,7 +491,9 @@ def UpdateDB(db, devices):
         #DBに存在するレコードは無視
         d = searchTable(db, "CC_ID", dev['CC_ID'], "BS_ID", dev['BS_ID'])
         if d != None:
-            continue
+            #郵便番号が同じなら無視
+            if dev['郵便番号'] == d['郵便番号']:
+                continue
 
         #Source作成
         s = makeSource(dev)
@@ -502,8 +507,8 @@ def UpdateDB(db, devices):
         else:
             #緯度、経度
             location_target, postal_card = get_location(dev['郵便番号'])
-            
             if location_target == None:
+                writeDeviceListError(g_devicelist_error_no_postcord_file, dev)
                 writeLog("ERROR", f"get_location({dev['郵便番号']}) -> 緯度、経度の取得に失敗しました：納入システム情報={s}")
                 continue
             else:
@@ -513,6 +518,7 @@ def UpdateDB(db, devices):
                 distance_km = geodesic(tokyo_location, device_location).km
                 if distance_km > 2000:
                     writeDeviceListError(g_devicelist_error_incorrect_postcord_file, dev)
+                    writeLog("DEBUG", f"東京間距離={distance_km} 郵便番号={postal_card} -> 緯度={location_target.latitude}, 経度={location_target.longitude}")
                     continue
                 else:
                     new_row.setdefault("郵便番号", postal_card)
