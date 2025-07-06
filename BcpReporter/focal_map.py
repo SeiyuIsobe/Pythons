@@ -6,6 +6,10 @@ import csv
 #データ
 #東京ー大阪間：406.42km、271px　→　0.67px/km
 
+"""_summary_
+
+pip install matplotlib
+"""
 g_width = 0
 g_height = 0
 g_lat_min, g_lon_min = 21.993036, 120.803206 #日本の左下

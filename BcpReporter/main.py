@@ -4,28 +4,42 @@ import pandas as pd
 from geopy.geocoders import Nominatim
 from haversine import haversine
 import time
-import csv
 from geopy.distance import geodesic
 from datetime import date
 import focal_map
+from collections import namedtuple
+import csv
 
+"""
+pip install haversine
+pip install geopy
+pip install pandas
+"""
 #begin---------入力パラメータ----------------------------------
 #震源地リストファイル
 g_focallist_file = r"in\focallist.txt"
 #納入リストファイル
-g_devicelist_file = r"in\納入システム_10_utf-8.csv"
+g_devicelist_file = r"in\納入システム.csv"
+#g_devicelist_file = r"in\納入システム_utf-8.csv.error_不正郵便番号_sjis.csv"
+#g_devicelist_file = r"in\納入システム_1_utf-8.csv"
+#g_devicelist_file = r"in\納入システム_10.csv"
+#g_devicelist_file = r"in\納入システム_10.csv.error_不正郵便番号_sjis.csv"
 #DB
 g_DB_devicelist_file = r"DB\db.csv"
 #結果
 g_devicechecklist_file = r"out\check_devices_list_sjis.csv"
 g_focallist_csv_file = r"out\focallist.csv"
-g_devicelist_error_file = r"out\納入システム_error_sjis.csv"
+g_devicelist_error_no_postcord_file = f"{g_devicelist_file.replace('in', 'out')}.error_郵便番号なし_sjis.csv"
+g_devicelist_error_incorrect_postcord_file = f"{g_devicelist_file.replace('in', 'out')}.error_不正郵便番号_sjis.csv"
 #観測点リストファイル
 g_sonarlist_file = r"sonarpointlist.csv"
 #end---------入力パラメータ------------------------------------
 
 # ジオロケーターの初期化
 geolocator = Nominatim(user_agent="myGeocoder")
+
+# 位置情報の構造体を定義
+Location = namedtuple("Location", ["latitude", "longitude"])
 
 #ログ
 g_logs = []
@@ -79,19 +93,23 @@ def loading(init=False):
     g_loadcounter = g_loadcounter + 1
     return
 
-def writeDeviceListError(device):
+def writeDeviceListError(error_file_path, device):
     #g_devicelist_error_fileを新規作成
     if device == None:
-        with open(g_devicelist_error_file, "w", encoding="sjis") as f:
+        with open(error_file_path, "w", encoding="sjis") as f:
             print("BS_ID,システム種別,システム名,システムSN,使用開始日,廃棄日,-,CC_ID,顧客名,設置室名,納入区分,-,通常デモダミーフラグ,サービス担当店,販売担当店（島津製作所）,販売担当店（島津MS/代理店）,販売担当店（MS卸）,国コード,国,都道府県,住所,顧客TEL,顧客FAX,顧客側担当者様1,顧客様TEL1,顧客側担当者様2,顧客様TEL2,FAX,E-Mail,サービス担当者,診療科・部署,備考,ユニットラベル貼付日,旧BS_ID,-,-,-,装置情報,-,保守,郵便番号", file=f)
         return
     
-    with open(g_devicelist_error_file, "a", encoding="sjis") as f:
+    """-><-"""
+    with open(error_file_path, "a", encoding="sjis") as f:
         s = ""
         for v in device.values():
-            s = s + str(v) + ","
-        print(s[:-1], file=f)
-
+            if v == None or pd.isna(v):
+                v = ""
+            s = s + '"' + str(v) + '"' + ","
+        print(filter_sjis_compatible(s[:-1]), file=f)
+    
+    
 def writeLog(typestring, detail):
     dt = "{0:%Y/%m/%d %H:%M:%S}".format(date.today())
     with open("error_log.txt", "+a", encoding="utf-8") as f:
@@ -156,6 +174,16 @@ def format_postal_code(postal_code):
 
 # 郵便番号の緯度・経度を取得する関数（リトライ機能付き）
 def get_location(postal_code, retries=10):
+    if postal_code == None or postal_code == "" or pd.isna(postal_code):
+        return None, None
+    
+    if '/' in postal_code:
+        try:
+            # 郵便番号がカンマ区切りの場合は最初の部分を使用
+            return Location(postal_code.split('/')[0], postal_code.split('/')[1]), None
+        except:
+            return None, None
+        
     for attempt in range(retries):
         try:
             #郵便番号のフォーマット修正
@@ -164,6 +192,7 @@ def get_location(postal_code, retries=10):
                 return None, None
             
             ret = geolocator.geocode(postal_code, timeout=10)  # タイムアウトを10秒に設定
+            time.sleep(1)  # リクエスト間に1秒待機
             return ret, postal_code
         except Exception as e:
             print(f"{postal_code} : エラーが発生しました: {e}. リトライ中... ({attempt + 1}/{retries})")
@@ -190,6 +219,11 @@ def get_location(postal_code, retries=10):
 
 """
 def loadFocalPointList():
+    #存在チェック
+    if os.path.exists(g_focallist_file) == False:
+        print(f"ファイルが見つかりません：{g_focallist_file}")
+        exit()
+        
     print(f"震源地リストを読込みます：{g_focallist_file}")
 
     loading(True)
@@ -213,6 +247,38 @@ def loadFocalPointList():
 
             loading()
 
+    new_rows = []
+    isFirstRow = True
+    for row in rows:
+        if isFirstRow:
+            # ヘッダー行
+            isFirstRow = False
+            new_rows.append([row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], "Latitude", "Longitude"])
+            continue
+        
+        new_rows.append([
+            row[0],  # 年
+            row[1],  # 月
+            row[2],  # 日
+            row[3],  # 時
+            row[4],  # 分
+            row[5],  # 秒
+            row[6],  # 緯度(度分)
+            row[7],  # 経度(度分)
+            row[8],  # 深さ(km)
+            row[9],  # M
+            row[10],  # 震央地名
+            dms_to_decimal(row[6]),  # 緯度(度)
+            dms_to_decimal(row[7])   # 経度(度)
+        ])
+    
+    # 元データ rows（リストのリスト）を DataFrame に変換
+    df = pd.DataFrame(new_rows[1:], columns=new_rows[0])
+    
+    # CSV に保存（SHIFT-JISで）
+    df.to_csv(g_focallist_csv_file, encoding='shift_jis', index=False, quoting=csv.QUOTE_ALL, quotechar='"')
+
+    """->
     #CSVファイルに書き込む
     with open(g_focallist_csv_file, 'w', encoding='sjis', newline='') as f:
         writer = csv.writer(f)
@@ -237,9 +303,15 @@ def loadFocalPointList():
         data = []
         for row in reader:
             data.append(row)
-    
-    print(f"\r...完了")
-    return data
+    <-"""
+    #CSVファイルを読込む
+    try:
+        df2 = pd.read_csv(g_focallist_csv_file, encoding="shift_jis")
+        data = df2.to_dict(orient="records")  # ← csv.DictReader と同様の形式
+        print(f"\r...完了")
+        return data
+    except:
+        return None
 
 
 """
@@ -250,17 +322,21 @@ def DBLoadDeviceList():
     #存在チェック
     if os.path.exists(g_DB_devicelist_file) == False:
         print(f"DBを作成します：{g_DB_devicelist_file}")
-        with open(g_DB_devicelist_file, "w", encoding="utf-8") as f:
+        with open(g_DB_devicelist_file, "w", encoding="sjis") as f:
             print("CC_ID,BS_ID,郵便番号,緯度,経度,Source", file=f)
         print("...完了")
         return []
 
     print(f"DBを読込みます：{g_DB_devicelist_file}")
+    df = pd.read_csv(g_DB_devicelist_file, encoding="shift_jis")
+    data = df.to_dict(orient="records")  # ← csv.DictReader と同様の形式
+    """->
     with open(g_DB_devicelist_file, "r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         data = []
         for row in reader:
             data.append(row)
+    <-"""
     print("...完了")
     return data
 
@@ -270,24 +346,29 @@ BS_ID,システム種別,システム名,システムSN,使用開始日,廃棄�
 193999,X線(一般),EZy-Rad Pro/X'sy Anesis A,MQC8321E8022,2024/11/5,,,80299,Dsこどもとみんなのクリニック,,新品,,通常,島津MS-東海支店-名古屋第一技術課,島津製作所-営業企画OEM,島津MS-東海支店-営業課(販),,JP,日本,愛知県,愛知県愛知郡東郷町大字春木字桝池39-1,0561-56-6545,,,,,,,,,,,,,,,,有,,なし,470-0162
 """
 def LoadDeviceList():
-    print(f"納入リストを読込みます：{g_devicelist_file}")
+
     #存在チェック
     if os.path.exists(g_devicelist_file) == False:
         print(f"ファイルが見つかりません：{g_devicelist_file}")
         exit()
+    
+    print(f"納入リストを読込みます：{g_devicelist_file}")
 
     #リストの内容をまずは全て読込む
     try:
+        df = pd.read_csv(g_devicelist_file, encoding="cp932")
+        data = df.to_dict(orient="records")  # ← csv.DictReader と同様の形式
+        """->
         with open(g_devicelist_file, "r", encoding="utf-8", newline="") as f:
             reader = csv.DictReader(f)
             data = []
             for row in reader:
                 data.append(row)
+        <-"""
         print("...完了")
         return data
-    except:
-        print(f"納入リストの読み込みエラー！！！：{g_devicelist_file}")
-        print(f"UTF-8で保存し直してもう一度実行してください")
+    except Exception as e:
+        print(f"納入リストの読み込みエラー！！！：{e}")
         exit()
     print("...完了")
     return data
@@ -317,6 +398,16 @@ def searchTable(target_table, target_item_name1, target_item1, target_item_name2
         if target_item1 == row[target_item_name1] and target_item2 == row[target_item_name2]:
             return row
     return None
+
+#Source作成
+def makeSource(dev):
+    s = ""
+    for v in dev.values():
+        if v == None or pd.isna(v):
+            v = ""
+        s = s + str(v) + ","
+    s = s[:-1]
+    return s
 
 def UpdateDB(db, devices):
     print("DBを更新します：", end="")
@@ -350,10 +441,7 @@ def UpdateDB(db, devices):
         #納入リストにある　→　納入リストのレコードと差異を確認してコピー
         else:
             #Sourceは作り直し
-            s = ""
-            for v in d.values():
-                s = s + v + ","
-            s = '"' + s[:-1] + '"'
+            s = makeSource(d)
 
             new_row.setdefault("CC_ID", row["CC_ID"])
             new_row.setdefault("BS_ID", row["BS_ID"])
@@ -366,15 +454,19 @@ def UpdateDB(db, devices):
 
             #差異あり　→　違う装置と判定、緯度経度は取り直し
             else:
-                #緯度、経度は取り直し
-                location_target, postal_card = get_location(d['郵便番号'])
-                time.sleep(1)  # リクエスト間に1秒待機
-                if location_target == None:
-                    writeLog("ERROR", f"get_location({d['郵便番号']}) -> 緯度、経度の取得に失敗しました：納入システム情報={s}")
+                if d['郵便番号'] == "":
+                    writeDeviceListError(g_devicelist_error_no_postcord_file, dev)
                     continue
-                new_row.setdefault("郵便番号", postal_card)
-                new_row.setdefault("緯度", location_target.latitude)
-                new_row.setdefault("経度", location_target.longitude)
+                else:
+                    #緯度、経度は取り直し
+                    location_target, postal_card = get_location(d['郵便番号'])
+
+                    if location_target == None:
+                        writeLog("ERROR", f"get_location({d['郵便番号']}) -> 緯度、経度の取得に失敗しました：納入システム情報={s}")
+                        continue
+                    new_row.setdefault("郵便番号", postal_card)
+                    new_row.setdefault("緯度", location_target.latitude)
+                    new_row.setdefault("経度", location_target.longitude)
 
             new_row.setdefault("Source", s)
         
@@ -382,7 +474,8 @@ def UpdateDB(db, devices):
         updaete_db.append(new_row)
 
     #続いて納入リストのレコードをDBに登録
-    writeDeviceListError(None)  # エラー用ファイルを新規作成
+    writeDeviceListError(g_devicelist_error_no_postcord_file, None)  # エラー用ファイルを新規作成
+    writeDeviceListError(g_devicelist_error_incorrect_postcord_file, None)  # エラー用ファイルを新規作成
 
     for dev in devices:
         i_row +=1
@@ -398,41 +491,54 @@ def UpdateDB(db, devices):
             continue
 
         #Source作成
-        s = ""
-        for v in dev.values():
-            s = s + v + ","
-        s = '"' + s[:-1] + '"'
-
+        s = makeSource(dev)
+        
         new_row.setdefault("CC_ID", dev["CC_ID"])
         new_row.setdefault("BS_ID", dev["BS_ID"])
-        #緯度、経度
-        location_target, postal_card = get_location(dev['郵便番号'])
-        time.sleep(1)  # リクエスト間に1秒待機
-        if location_target == None:
-            writeLog("ERROR", f"get_location({dev['郵便番号']}) -> 緯度、経度の取得に失敗しました：納入システム情報={s}")
-            writeDeviceListError(dev)
-            continue 
-        new_row.setdefault("郵便番号", postal_card)
-        new_row.setdefault("緯度", location_target.latitude)
-        new_row.setdefault("経度", location_target.longitude)
-        new_row.setdefault("Source", s)
+        #郵便番号が空欄の場合はエラー
+        if dev['郵便番号'] == "":
+            writeDeviceListError(g_devicelist_error_no_postcord_file, dev)
+            continue
+        else:
+            #緯度、経度
+            location_target, postal_card = get_location(dev['郵便番号'])
+            
+            if location_target == None:
+                writeLog("ERROR", f"get_location({dev['郵便番号']}) -> 緯度、経度の取得に失敗しました：納入システム情報={s}")
+                continue
+            else:
+                #東京との距離を計算して2000Knm以上であればエラー
+                tokyo_location = (35.682839, 139.759455)  # 東京の緯度経度
+                device_location = (location_target.latitude, location_target.longitude)
+                distance_km = geodesic(tokyo_location, device_location).km
+                if distance_km > 2000:
+                    writeDeviceListError(g_devicelist_error_incorrect_postcord_file, dev)
+                    continue
+                else:
+                    new_row.setdefault("郵便番号", postal_card)
+                    new_row.setdefault("緯度", location_target.latitude)
+                    new_row.setdefault("経度", location_target.longitude)
+                    new_row.setdefault("Source", s)
 
-        #更新先のレコードに登録
-        updaete_db.append(new_row)
+                    #更新先のレコードに登録
+                    updaete_db.append(new_row)
 
     #進捗表示
     showProgress("DBを更新します：", i_row + 1, num_db + num_devices, 20)
     print()
 
-    with open(g_DB_devicelist_file, "w", encoding="utf-8") as f:
+    with open(g_DB_devicelist_file, "w", encoding="sjis") as f:
         print("CC_ID,BS_ID,郵便番号,緯度,経度,Source", file=f)
         
         for u in updaete_db:
             s = ""
             for v in u.values():
-                s = s + str(v) + ","
-            print(s[:-1], file=f)
+                s = s + '"' + str(v) + '"' + ","
+            print(filter_sjis_compatible(s[:-1]), file=f)
     print("...完了")
+    
+    print(f"郵便番号なし：{g_devicelist_error_no_postcord_file}")
+    print(f"不正郵便番号：{g_devicelist_error_incorrect_postcord_file}")
 
     return updaete_db
 
@@ -539,7 +645,7 @@ def main():
     print("*                                                                                 *")
     print("***********************************************************************************")
 
-    ans = ask_you("解析モード？ 0:新規解析　1:再解析 > ", ['0', '1'])
+    ans = ask_you("解析モード？ 0: 新規解析　1: 再解析　2: DB更新 > ", ['0', '1', '2'])
     if ans == '0':
         #震源地リストの読込み
         focaldatas = loadFocalPointList()
@@ -562,6 +668,13 @@ def main():
         db = DBLoadDeviceList()
         #被災病院の抽出
         analyze(focaldatas, db, 30)
+    elif ans == '2':
+        #DB納入リストの読込み
+        db = DBLoadDeviceList()
+        #納入リストの読込み
+        devices = LoadDeviceList()
+        #DB納入リストの更新
+        db = UpdateDB(db, devices)
     return
 
 if __name__=='__main__':
