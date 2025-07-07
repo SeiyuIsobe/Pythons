@@ -19,8 +19,8 @@ pip install pandas
 #震源地リストファイル
 g_focallist_file = r"in\focallist.txt"
 #納入リストファイル
-#g_devicelist_file = r"in\納入システム.csv"
-g_devicelist_file = r"in\納入システム.csv.error_不正郵便番号_sjis.csv"
+g_devicelist_file = r"in\納入システム.csv"
+#g_devicelist_file = r"in\a.csv"
 #DB
 g_DB_devicelist_file = r"DB\db.csv"
 #結果
@@ -162,9 +162,16 @@ def dms_to_decimal(dms_str):
 # 郵便番号をハイフン付きに変換する関数
 def format_postal_code(postal_code):
     try:
-        if len(postal_code) == 7 and postal_code.isdigit():
-            return f"{postal_code[:3]}-{postal_code[3:]}"
-        return postal_code
+        # ハイフン付き形式（例: 123-4567）
+        if re.fullmatch(r"\d{3}-\d{4}", postal_code):
+            return postal_code
+
+        # 数字7桁のみ（例: 1234567）→ ハイフン追加
+        if re.fullmatch(r"\d{7}", postal_code):
+            return postal_code[:3] + '-' + postal_code[3:]
+
+        # 上記以外は不正
+        return None
     except:
         writeLog("ERROR", f"郵便番号の形式が不正なので緯度・軽度の取得に失敗しました：{postal_code}")
         return None
@@ -174,10 +181,15 @@ def get_location(postal_code, retries=10):
     if postal_code == None or postal_code == "" or pd.isna(postal_code):
         return None, None
     
-    if '/' in postal_code:
+    if ',' in postal_code:
         try:
+            # XXX-XXXX,緯度,経度 の形式を処理
+            old_postal_code = postal_code.split(',')[0].strip()
+            lat = float(postal_code.split(',')[1].strip())
+            lon = float(postal_code.split(',')[2].strip())
+            
             # 郵便番号がカンマ区切りの場合は最初の部分を使用
-            return Location(postal_code.split('/')[0], postal_code.split('/')[1]), None
+            return Location(lat, lon), old_postal_code
         except:
             return None, None
         
@@ -504,9 +516,14 @@ def UpdateDB(db, devices):
         if dev['郵便番号'] == "":
             writeDeviceListError(g_devicelist_error_no_postcord_file, dev)
             continue
+        
+        #CC_ID, BS_IDが一致　→　DBと納入リスト
+        #n納入リストの郵便番号
+        #    XXX-XXXX
+        #    XXX-XXXX,緯度,経度
         else:
             #緯度、経度
-            location_target, postal_card = get_location(dev['郵便番号'])
+            location_target, postal_card = get_location(str(dev['郵便番号']))
             if location_target == None:
                 writeDeviceListError(g_devicelist_error_no_postcord_file, dev)
                 writeLog("ERROR", f"get_location({dev['郵便番号']}) -> 緯度、経度の取得に失敗しました：納入システム情報={s}")
@@ -560,36 +577,37 @@ def analyze(focaldatas, db, rad_km):
         num_focaldatas = len(focaldatas)
         num_db = len(db)
         total = num_focaldatas * num_db
-        i_row = -1
-        j_focal = -1
-        for focal in focaldatas:
-            j_focal +=1
+        if total > 0:
+            i_row = -1
+            j_focal = -1
+            for focal in focaldatas:
+                j_focal +=1
 
-            lat_focal = float(focal["Latitude"])
-            lon_focal = float(focal["Longitude"])
+                lat_focal = float(focal["Latitude"])
+                lon_focal = float(focal["Longitude"])
 
-            for device in db:
-                i_row +=1
+                for device in db:
+                    i_row +=1
 
-                bs_id = device['BS_ID']
-                lat_device = device['緯度']
-                lon_device = device['経度']
+                    bs_id = device['BS_ID']
+                    lat_device = device['緯度']
+                    lon_device = device['経度']
+                
+                    d_km = geodesic((lat_device, lon_device), (lat_focal, lon_focal)).km
+
+                    if d_km <= rad_km:
+                        buflist = [int(d_km), focal["震央地名"], lat_focal, lon_focal, device] #距離(Km),震央地名,震源地緯度,震源地経度
+                        if bs_id in bcp_devices.keys():
+                            bcp_devices[bs_id].append(buflist)
+                        else:
+                            bcp_devices.setdefault(bs_id, [buflist])
+
+                    #進捗表示
+                    showProgress("進捗：", i_row + 1, total, 20)
             
-                d_km = geodesic((lat_device, lon_device), (lat_focal, lon_focal)).km
-
-                if d_km <= rad_km:
-                    buflist = [int(d_km), focal["震央地名"], lat_focal, lon_focal, device] #距離(Km),震央地名,震源地緯度,震源地経度
-                    if bs_id in bcp_devices.keys():
-                        bcp_devices[bs_id].append(buflist)
-                    else:
-                        bcp_devices.setdefault(bs_id, [buflist])
-
-                #進捗表示
-                showProgress("進捗：", i_row + 1, total, 20)
-        
-        #進捗表示
-        showProgress("進捗：", i_row + 1, total, 20)
-        print()
+            #進捗表示
+            showProgress("進捗：", i_row + 1, total, 20)
+            print()
 
         #結果出力
         with open(g_devicechecklist_file, "w", encoding="sjis") as f:
