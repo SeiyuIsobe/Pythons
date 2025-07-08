@@ -9,6 +9,7 @@ from datetime import date
 import focal_map
 from collections import namedtuple
 import csv
+from zipcode_db import ZipcodeDB
 
 """
 pip install haversine
@@ -23,6 +24,7 @@ g_devicelist_file = r"in\納入システム.csv"
 #g_devicelist_file = r"in\a.csv"
 #DB
 g_DB_devicelist_file = r"DB\db.csv"
+g_DB_postalcode_file = r"DB\db_postal.csv"
 #結果
 g_devicechecklist_file = r"out\check_devices_list_sjis.csv"
 g_focallist_csv_file = r"out\focallist.csv"
@@ -36,13 +38,16 @@ g_sonarlist_file = r"sonarpointlist.csv"
 geolocator = Nominatim(user_agent="myGeocoder")
 
 # 位置情報の構造体を定義
-Location = namedtuple("Location", ["latitude", "longitude"])
+Location = namedtuple("Location", ["latitude", "longitude", "distance"])
 
 #ログ
 g_logs = []
 
 #読込カウンター
 g_loadcounter = 0
+
+#郵便番号DB
+g_zipcode_db = ZipcodeDB(g_DB_postalcode_file)
 
 def loading(init=False):
     global g_loadcounter
@@ -188,10 +193,18 @@ def get_location(postal_code, retries=10):
             lat = float(postal_code.split(',')[1].strip())
             lon = float(postal_code.split(',')[2].strip())
             
+            #郵便番号DBに登録
+            g_zipcode_db.add_or_update(postal_code, ret.latitude, ret.longitude)
+            
             # 郵便番号がカンマ区切りの場合は最初の部分を使用
-            return Location(lat, lon), old_postal_code
+            return Location(lat, lon, -1), old_postal_code
         except:
             return None, None
+    
+    ret = g_zipcode_db.get(format_postal_code(postal_code))
+    if ret is not None:
+        # 郵便番号がDBに存在する場合はそのまま返す
+        return Location(ret.latitude, ret.longitude, -1), postal_code
         
     for attempt in range(retries):
         try:
@@ -202,7 +215,18 @@ def get_location(postal_code, retries=10):
             
             ret = geolocator.geocode(postal_code, timeout=10)  # タイムアウトを10秒に設定
             time.sleep(1)  # リクエスト間に1秒待機
-            return ret, postal_code
+            
+            #東京との距離を計算して2000Knm以上であればエラー
+            tokyo_location = (35.682839, 139.759455)  # 東京の緯度経度
+            device_location = (ret.latitude, ret.longitude)
+            distance_km = geodesic(tokyo_location, device_location).km
+            
+            if distance_km < 2000:
+                #郵便番号DBに登録
+                g_zipcode_db.add_or_update(postal_code, ret.latitude, ret.longitude)
+            
+            #return ret, postal_code
+            return Location(ret.latitude, ret.longitude, distance_km), postal_code
         except Exception as e:
             print(f"{postal_code} : エラーが発生しました: {e}. リトライ中... ({attempt + 1}/{retries})")
             time.sleep(2)  # リトライ間隔を2秒に設定
@@ -524,18 +548,14 @@ def UpdateDB(db, devices):
         else:
             #緯度、経度
             location_target, postal_card = get_location(str(dev['郵便番号']))
-            if location_target == None:
+            if location_target == None and postal_card == None:
                 writeDeviceListError(g_devicelist_error_no_postcord_file, dev)
                 writeLog("ERROR", f"get_location({dev['郵便番号']}) -> 緯度、経度の取得に失敗しました：納入システム情報={s}")
                 continue
             else:
-                #東京との距離を計算して2000Knm以上であればエラー
-                tokyo_location = (35.682839, 139.759455)  # 東京の緯度経度
-                device_location = (location_target.latitude, location_target.longitude)
-                distance_km = geodesic(tokyo_location, device_location).km
-                if distance_km > 2000:
+                if location_target.distance >= 2000:
                     writeDeviceListError(g_devicelist_error_incorrect_postcord_file, dev)
-                    writeLog("DEBUG", f"東京間距離={distance_km} 郵便番号={postal_card} -> 緯度={location_target.latitude}, 経度={location_target.longitude}")
+                    writeLog("DEBUG", f"東京間距離={location_target.distance} 郵便番号={postal_card} -> (緯度, 経度) = ({location_target.latitude}={location_target.longitude})")
                     continue
                 else:
                     new_row.setdefault("郵便番号", postal_card)
@@ -545,6 +565,7 @@ def UpdateDB(db, devices):
 
                     #更新先のレコードに登録
                     updaete_db.append(new_row)
+                    
 
     #進捗表示
     showProgress("DBを更新します：", i_row + 1, num_db + num_devices, 20)
