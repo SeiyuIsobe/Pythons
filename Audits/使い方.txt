@@ -1,0 +1,5 @@
+ThingWorxのComposerから監査ログをエクスポートする
+　→エクスポートされたファイルはzipファイル
+zipファイルを展開する
+　→展開先はmain.pyと同じフォルダ
+　→\AuditArchive\AuditArchiveDirectPersistence\export\*.json

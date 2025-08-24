@@ -7,29 +7,39 @@ from datetime import datetime
 #      入力パラメータ
 #
 #解析目的のssl_request_log
-#TARGET_ssl_request_log = r"C:\Devs\Axeda\tsvr1\var\log\httpd\ssl_request_log-20250511"
-TARGET_ssl_request_log = r"C:\Devs\TW\tw-cnn1\var\log\httpd\ssl_request_log-20250511"
+#TARGET_ssl_request_log = r"C:\Devs\TW\tw-cnn1\var\log\httpd\ssl_request_log-20240227"
+TARGET_ssl_request_log = r"C:\Devs\Axeda\tsvr1\var\log\httpd\ssl_request_log"
+#TARGET_ssl_request_log = r"C:\Devs\TW\tw-cnn1\var\log\httpd\ssl_request_log-20250511"
+#TARGET_ssl_request_log = r"C:\Devs\TW\tw-cnn1\var\log\httpd\ssl_request_log-20250513"
+
 #
 #解析対象は？　全て=True、絞る=False
-IS_TARGET_ALL = False
+IS_TARGET_ALL = True
 #
 #結果出力先フォルダ
-OUTPUT_CSV_PATH = r"C:\Devs\Python\Output\SslRequestLogAnalyzer\SMS"
+#OUTPUT_CSV_PATH = r"C:\Devs\Python\Output\SslRequestLogAnalyzer"
+OUTPUT_CSV_PATH = r"C:\Devs\Python\Output\SslRequestLogAnalyzer\Axeda\ssl_request_log-20250602"
+
 #
 #結果出力先ファイル名
-OUTPUT_CSV_FILE = "ssl_request.csv"
+OUTPUT_CSV_FILE = "ssl_request_log.csv"
+
 #
 #全てまとめて出力=True、個別に出力=False
 IS_ALL_OUTPUT = True
 #
 #対象の期間は？　指定する=True、指定しない=False
-IS_PERIOD = True
+IS_PERIOD = False
 #
 #IS_PERIOD = Trueの場合
 #開始日時
-START_PERIOD_DATE = "2025/5/10 00:00:00"
+START_PERIOD_DATE = "2025/5/13 00:00:00"
 #終了日時
-END_PERIOD_DATE = "2025/5/10 23:59:59"
+END_PERIOD_DATE = "2025/5/13 00:59:59"
+#
+#
+#最後のみ出力=True
+IS_LASTDATA = True
 #---------------------
 
 # global
@@ -189,11 +199,15 @@ def read_ssl_request_log():
             f = open(outfile, mode="w", encoding="utf-8")
             print("datetime,timezone,IP,Axeda S/N,TLS,Cipher", file=f)
 
-        i = i + 1
-        for csv_string in dic_value:
-            rr = int(i/count_axedasn*100)
-            print(csv_string, file=f)
-            print(f"\033[Aprogrss={rr}%")
+        #CSVに書出し
+        if IS_LASTDATA:
+            print(dic_value[-1], file=f)
+        else:
+            i = i + 1
+            for csv_string in dic_value:
+                rr = int(i/count_axedasn*100)
+                print(csv_string, file=f)
+                print(f"\033[Aprogrss={rr}%")
         
         if IS_ALL_OUTPUT:
             pass

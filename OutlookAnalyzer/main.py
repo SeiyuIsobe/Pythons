@@ -4,6 +4,23 @@ import os
 import re
 import pytz
 from datetime import datetime
+from models import DR_300
+from models import FLUOROspeed_X1
+from models import BresTome
+from models import CVS_MPC
+from models import CVS_MPC_2
+from models import DAR_3500
+from models import DAR_7500
+from models import DAR_8000
+from models import DR_200
+from models import Elmammo
+from models import FlexaF3
+from models import FlexaF4
+from models import PET_MPC
+from models import RADspeedProEDGE
+from models import Trinias
+from models import Trinias_Opera
+from models import Trinias_smart
 
 
 """
@@ -35,7 +52,37 @@ _reg_AxedaSN = re.compile(r'(?<=Axeda S/N: )+.+(?=\r\n)')
 _reg_Date = re.compile(r'(?<=Date: )+.+(?=\r\n)')
 _reg_State = re.compile(r'(?<=State: )+.+(?=\r\n)')
 
-_target_folder = ["医用","サ統","ThingWorx","TWアラート","ConnectionStatusDetection","SMS"]
+_target_folder = ["医用","サ統","ThingWorx","TWアラート"]
+
+_assetDic = {}
+
+#=====================
+#---------------------
+#      入力パラメータ
+#
+#検索
+_doSearch = True
+#
+#検索文字列
+_search_string = "**" #SMS
+#_search_string = "" #検索Wordなし→全検索
+#
+#対象の期間は？　指定する=True、指定しない=False
+IS_PERIOD = True
+#
+#IS_PERIOD = Trueの場合
+#開始日時
+START_PERIOD_DATE = "2025/5/1 00:00:00"
+#終了日時
+END_PERIOD_DATE = "2025/5/31 23:59:59"
+#---------------------
+#=====================
+
+# 期間指定
+_isPeriod = IS_PERIOD
+_fromPeriod = datetime.strptime(START_PERIOD_DATE, "%Y/%m/%d %H:%M:%S")
+_toPeriod = datetime.strptime(END_PERIOD_DATE, "%Y/%m/%d %H:%M:%S")
+_dic_month = {'Jan':1, 'Feb':2, 'Mar':3, 'Apr':4, 'May':5, 'Jun':6, 'Jul':7, 'Aug':8, 'Sep':9, 'Oct':10, 'Nov':11, 'Dec':12}
 
 """
 TW ConnectionStatusDetection : Good Heart Foundation CATH LAB
@@ -49,8 +96,8 @@ def getSubject(subject_str):
 
 """
 Bodyの中身
-Customer: Good Heart Foundation\r\n
-Room: CATH LAB\r\n
+Customer: **MMS** St. Tammany Parish SVG4\r\n
+Room: SMS20190049: SVG4\r\n
 Model: Trinias.smart\r\n
 Axeda S/N: SN2E9155D23000\r\n
 Date: 2025-01-24 13:08:31.837 UTC+05:30\r\n
@@ -88,7 +135,22 @@ def getBody(body_str):
     if r:
         state = r.group()
     
-    return customer, room, model, axedasn, date, state
+    #[Error]以降に記載されているアラートを取得
+    lines = re.split('\r\n', body_str)
+    isError = False
+    errors = []
+    for line in lines:
+        if line == "[Error]":
+            isError = True
+            continue
+        if isError:
+            #改行のみは終端
+            if line == "":
+                break
+            #アラートを取得
+            errors.append(line)
+
+    return customer, room, model, axedasn, date, state, errors
 
 #
 # utc_str: 2025-01-24 13:08:31.837 UTC+05:30
@@ -112,8 +174,6 @@ def getJapanTZ(utc_str):
             utc_time = datetime.strptime(utc_str, "%Y-%m-%d %H:%M:%S%z")
 
     try:
-       
-
         # 日本時間のタイムゾーンを取得
         japan_tz = pytz.timezone('Asia/Tokyo')
 
@@ -127,6 +187,76 @@ def getJapanTZ(utc_str):
 
     except:
         print(f"getJapanTZ error. utc_str = {utc_str}")
+
+#date_line
+#2025-05-31 03:02:08.558
+def isPeriod(date_line):
+    #期間指定なし
+    if(_isPeriod == False):
+        return True
+    
+    #日付型に変換
+    obj_date = getDateObject(date_line)
+    
+    if(_fromPeriod <= obj_date <= _toPeriod):
+        return True
+    
+    return False
+
+# 対応書式：2025-05-31 03:02:08.558
+def getDateObject(line):
+    try:
+        d0 = re.split('[-/: .]', line)
+        return datetime(
+            int(d0[0]),
+            int(d0[1]),
+            int(d0[2]),
+            int(d0[3]),
+            int(d0[4]),
+            int(d0[5])
+            )
+    except Exception as e:
+        print(f"except!!! {e} -> {line}")
+
+    return datetime(1900, 1, 1, 0, 0, 0, 0)
+
+def createModel(model):
+    if model == "DR-300":
+        obj_model = DR_300()
+    elif model == "FLUOROspeed.X1":
+        obj_model = FLUOROspeed_X1()
+    elif model == "BresTome":
+        obj_model = BresTome()
+    elif model == "CVS_MPC":
+        obj_model = CVS_MPC()
+    elif model == "CVS_MPC_2":
+        obj_model = CVS_MPC_2()
+    elif model == "DAR-3500":
+        obj_model = DAR_3500()
+    elif model == "DAR-7500":
+        obj_model = DAR_7500()
+    elif model == "DAR-8000":
+        obj_model = DAR_8000()
+    elif model == "DR-200":
+        obj_model = DR_200()
+    elif model == "Elmammo":
+        obj_model = Elmammo()
+    elif model == "FlexaF3":
+        obj_model = FlexaF3()
+    elif model == "FlexaF4":
+        obj_model = FlexaF4()
+    elif model == "PET_MPC":
+        obj_model = PET_MPC()
+    elif model == "RADspeedProEDGE":
+        obj_model = RADspeedProEDGE()
+    elif model == "Trinias":
+        obj_model = Trinias()
+    elif model == "Trinias.Opera":
+        obj_model = Trinias_Opera()
+    elif model == "Trinias.smart":
+        obj_model = Trinias_smart()
+    
+    return obj_model
 
 def main():
     # Outlookアプリケーションの接続
@@ -153,20 +283,59 @@ def main():
     print("Subject,SentOn,ReceivedTime,Customer,Room,Model,Axeda S/N,Date,State,Date_JST", file=fw)
     # メールの取得とCSVへの書き出し
     for item in items:
+
+        #件名の検索
+        if len(_search_string) == 0: #検索しない場合はpass
+            pass
+        elif _search_string in item.Subject: #件名が一致する場合はpass
+            pass
+        else:
+            continue
+
         if item.Class == 43:  # 43はメールアイテムのクラス
-            customer, room, model, axedasn, date, state = getBody(item.Body)
-            #print(f"{item.Subject},{item.SentOn},{item.ReceivedTime},\"{item.Body}\"", file=fw)
+            #メールの内容を取得
+            customer, room, model, axedasn, date, state, errors = getBody(item.Body)
+            
+            #メールの内容をCSV出力する内容に変換
             subject = item.Subject
             japan_time = getJapanTZ(date)
-            #print(f"item.SentOn={item.SentOn}")
             senton = str(item.SentOn).replace("+00:00", "") #謎、日本時間なのに+00:00と標準時間のような表現になっている
-            #print(f"senton={senton}")
             receivedtime = str(item.ReceivedTime).replace("+00:00", "") #謎、日本時間なのに+00:00と標準時間のような表現になっている
-            #subject = subject.encode("shift-jis").decode("utf-8", errors="ignore")
+            
+            #期間範囲
+            if isPeriod(japan_time):
+                pass
+            else:
+                continue
+
+            #モデルオブジェクト生成
+            obj_model = createModel(model)
+
+            #モデルオブジェクトの保持
+            if axedasn in _assetDic.keys():
+                obj_model = _assetDic[axedasn]
+            else:
+                _assetDic.setdefault(axedasn, obj_model)
+
+            #アラート登録
+            for error in errors:
+                #アラートを登録
+                obj_model.registerAlert(error, japan_time)
+
+            #出力
             print(f"\"{subject}\",\"{senton}\",\"{receivedtime}\",\"{customer}\",\"{room}\",\"{model}\",\"{axedasn}\",\"{date}\",\"{state}\",\"{japan_time}\"", file=fw)
     fw.close()
-
     print('メール情報をoutput.csvにエクスポートしました。')
+
+    # アラート情報の出力
+    fw = open("output_alert.csv", "w", encoding="utf-8")
+    print("Axeda S/N,Model,Alert Name,Alert Dates(JST)", file=fw)
+    for key_axedasn, value_model in _assetDic.items():
+        for alert_name, alert_dates_list in value_model.Alertdic.items():
+            for alert_date in alert_dates_list:
+                print(f"\"{key_axedasn}\",\"{value_model.Name}\",\"{alert_name}\",\"{alert_date}\"", file=fw)
+    fw.close()
+    print('アラート情報をoutput_alert.csvにエクスポートしました。')
 
 if __name__=='__main__':
 
