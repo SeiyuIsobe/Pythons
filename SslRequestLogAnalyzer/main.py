@@ -7,18 +7,18 @@ from datetime import datetime
 #      入力パラメータ
 #
 #解析目的のssl_request_log
-#TARGET_ssl_request_log = r"C:\Devs\TW\tw-cnn1\var\log\httpd\ssl_request_log-20240227"
-TARGET_ssl_request_log = r"C:\Devs\Axeda\tsvr1\var\log\httpd\ssl_request_log"
-#TARGET_ssl_request_log = r"C:\Devs\TW\tw-cnn1\var\log\httpd\ssl_request_log-20250511"
-#TARGET_ssl_request_log = r"C:\Devs\TW\tw-cnn1\var\log\httpd\ssl_request_log-20250513"
+TARGET_ssl_request_log = r"C:\Devs\TW\tw-cnn1\var\log\httpd\ssl_request_log-20250907"
+#TARGET_ssl_request_log = r"C:\Devs\TW\tw-cnn1\var\log\httpd\ssl_request_log-20250831"
+TARGET_ssl_request_log = r"C:\Devs\TW\tw-cnn1\var\log\httpd\ssl_request_log-20250921"
 
 #
 #解析対象は？　全て=True、絞る=False
-IS_TARGET_ALL = True
+IS_TARGET_ALL = False
 #
 #結果出力先フォルダ
-#OUTPUT_CSV_PATH = r"C:\Devs\Python\Output\SslRequestLogAnalyzer"
-OUTPUT_CSV_PATH = r"C:\Devs\Python\Output\SslRequestLogAnalyzer\Axeda\ssl_request_log-20250602"
+#OUTPUT_CSV_PATH = r"C:\Devs\Python\Output\SslRequestLogAnalyzer\SMS\ssl_request_log-20250907"
+#OUTPUT_CSV_PATH = r"C:\Devs\Python\Output\SslRequestLogAnalyzer\SMS\ssl_request_log-20250831"
+OUTPUT_CSV_PATH =  r"C:\Devs\Python\Output\SslRequestLogAnalyzer\SMS\ssl_request_log-20250921"
 
 #
 #結果出力先ファイル名
@@ -33,13 +33,13 @@ IS_PERIOD = False
 #
 #IS_PERIOD = Trueの場合
 #開始日時
-START_PERIOD_DATE = "2025/5/13 00:00:00"
+START_PERIOD_DATE = "2025/9/3 03:00:00"
 #終了日時
-END_PERIOD_DATE = "2025/5/13 00:59:59"
+END_PERIOD_DATE = "2025/9/5 02:59:59"
 #
 #
 #最後のみ出力=True
-IS_LASTDATA = True
+IS_LASTDATA = False
 #---------------------
 
 # global

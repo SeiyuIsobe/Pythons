@@ -32,8 +32,8 @@ import pathlib
 #TARGET_JSON = r"C:\Users\s-iso\Downloads\sms_202504_202509\AuditArchive\AuditArchiveDirectPersistence\export\*.json"
 TARGET_JSON = r"C:\temp\temp6\*.json"
 TARGET_ROOT = r"C:\temp\temp6\out"
-OUTPUT_CSV = "audit_log_all_test.csv"
-IS_SOURCE_TWL = True # sourceがThingNameであるもののみ抽出=True、全部=False
+OUTPUT_CSV = "audit_log_e1.csv"
+IS_SOURCE_TWL = False # sourceがThingNameであるもののみ抽出=True、全部=False
 
 _dic_cat = {
     "IDM WS Extension": "Information",

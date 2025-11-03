@@ -38,7 +38,7 @@
       {
         "name": "ECP_F_Error_Level",
         "time": "2025-08-23T09:00:00Z",
-        "value": "5",
+        "value": 5,
         "quality": "GOOD"
       },
       {

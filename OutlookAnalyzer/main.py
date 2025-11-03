@@ -51,6 +51,12 @@ _reg_Model = re.compile(r'(?<=Model: )+.+(?=\r\n)')
 _reg_AxedaSN = re.compile(r'(?<=Axeda S/N: )+.+(?=\r\n)')
 _reg_Date = re.compile(r'(?<=Date: )+.+(?=\r\n)')
 _reg_State = re.compile(r'(?<=State: )+.+(?=\r\n)')
+_reg_Customer_jp = re.compile(r'(?<=Customer: )+.+(?=\r\n)')
+_reg_Room_jp = re.compile(r'(?<=Room: )+.+(?=\r\n)')
+_reg_Model_jp = re.compile(r'(?<=Model: )+.+(?=\r\n)')
+_reg_AxedaSN_jp = re.compile(r'(?<=Axeda S/N: )+.+(?=\r\n)')
+_reg_Date_jp = re.compile(r'(?<=Date: )+.+(?=\r\n)')
+_reg_State_jp = re.compile(r'(?<=State: )+.+(?=\r\n)')
 
 _target_folder = ["医用","サ統","ThingWorx","TWアラート"]
 
@@ -61,20 +67,19 @@ _assetDic = {}
 #      入力パラメータ
 #
 #検索
-_doSearch = True
+_doSearch = False
 #
-#検索文字列
-_search_string = "**" #SMS
-#_search_string = "" #検索Wordなし→全検索
+#検索文字列 SMSの場合**
+_search_string = ""
 #
 #対象の期間は？　指定する=True、指定しない=False
 IS_PERIOD = True
 #
 #IS_PERIOD = Trueの場合
 #開始日時
-START_PERIOD_DATE = "2025/5/1 00:00:00"
+START_PERIOD_DATE = "2024/1/1 00:00:00"
 #終了日時
-END_PERIOD_DATE = "2025/5/31 23:59:59"
+END_PERIOD_DATE = "2024/12/31 23:59:59"
 #---------------------
 #=====================
 
@@ -114,33 +119,57 @@ def getBody(body_str):
     r = _reg_Customer.search(body_str)
     if r:
         customer = r.group()
+    else:
+        r_jp = _reg_Customer_jp.search(body_str)
+        if r_jp:
+            customer = r_jp.group()
 
     r = _reg_Room.search(body_str)
     if r:
         room = r.group()
+    else:
+        r_jp = _reg_Room_jp.search(body_str)
+        if r_jp:
+            room = r_jp.group()
 
     r = _reg_Model.search(body_str)
     if r:
         model = r.group()
+    else:
+        r_jp = _reg_Model_jp.search(body_str)
+        if r_jp:
+            model = r_jp.group()
 
     r = _reg_AxedaSN.search(body_str)
     if r:
         axedasn = r.group()
+    else:
+        r_jp = _reg_AxedaSN_jp.search(body_str)
+        if r_jp:
+            axedasn = r_jp.group()
 
     r = _reg_Date.search(body_str)
     if r:
         date = r.group()
+    else:
+        r_jp = _reg_Date_jp.search(body_str)
+        if r_jp:
+            date = r_jp.group()
 
     r = _reg_State.search(body_str)
     if r:
         state = r.group()
+    else:
+        r_jp = _reg_State_jp.search(body_str)
+        if r_jp:
+            state = r_jp.group()
     
     #[Error]以降に記載されているアラートを取得
     lines = re.split('\r\n', body_str)
     isError = False
     errors = []
     for line in lines:
-        if line == "[Error]":
+        if line == "[Error]" or line == "【エラー内容】":
             isError = True
             continue
         if isError:
@@ -170,8 +199,11 @@ def getJapanTZ(utc_str):
                 # 文字列をdatetimeオブジェクトに変換
                 utc_time = datetime.strptime(utc_str, "%Y-%m-%d %H:%M:%S.%f%z")
         else:
-            # 文字列をdatetimeオブジェクトに変換
-            utc_time = datetime.strptime(utc_str, "%Y-%m-%d %H:%M:%S%z")
+            try:
+                # 文字列をdatetimeオブジェクトに変換
+                utc_time = datetime.strptime(utc_str, "%Y-%m-%d %H:%M:%S%z")
+            except:
+                return None
 
     try:
         # 日本時間のタイムゾーンを取得
@@ -258,6 +290,16 @@ def createModel(model):
     
     return obj_model
 
+def getErrorItem(errlist):
+    level = ""
+    message = ""
+    for err in errlist:
+        if ".Level=" in err:
+            level = err.split("=")[1]
+        elif ".Message=" in err:
+            message = err.split("=")[1]
+    return level, message
+
 def main():
     # Outlookアプリケーションの接続
     outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
@@ -271,7 +313,6 @@ def main():
     root_folder = outlook.Folders["s-isobe@shimadzu.co.jp"]
 
     # 目的のフォルダの取得
-    #folder = root_folder.Folders["医用"].Folders["サ統"].Folders["ThingWorx"].Folders["TWアラート"].Folders["ConnectionStatusDetection"]
     for target_folder in _target_folder:
         root_folder = root_folder.Folders[target_folder]
     folder = root_folder
@@ -280,7 +321,7 @@ def main():
     items = folder.Items
 
     fw = open("output.csv", "w", encoding="utf-8")
-    print("Subject,SentOn,ReceivedTime,Customer,Room,Model,Axeda S/N,Date,State,Date_JST", file=fw)
+    print("Subject,SentOn,ReceivedTime,Customer,Room,Model,Axeda S/N,Date,State,Date_JST,AlertLevel,AlertMessage", file=fw)
     # メールの取得とCSVへの書き出し
     for item in items:
 
@@ -299,6 +340,15 @@ def main():
             #メールの内容をCSV出力する内容に変換
             subject = item.Subject
             japan_time = getJapanTZ(date)
+            if japan_time == None:
+                continue
+            #エラー
+            alert_level, alert_message = getErrorItem(errors)
+
+            # アラートメッセージが無いものは無視
+            if alert_message == "":
+                continue
+
             senton = str(item.SentOn).replace("+00:00", "") #謎、日本時間なのに+00:00と標準時間のような表現になっている
             receivedtime = str(item.ReceivedTime).replace("+00:00", "") #謎、日本時間なのに+00:00と標準時間のような表現になっている
             
@@ -323,11 +373,14 @@ def main():
                 obj_model.registerAlert(error, japan_time)
 
             #出力
-            print(f"\"{subject}\",\"{senton}\",\"{receivedtime}\",\"{customer}\",\"{room}\",\"{model}\",\"{axedasn}\",\"{date}\",\"{state}\",\"{japan_time}\"", file=fw)
+            # 文字化けするのでCustomerとRoomは空
+            #print(f"\"{subject}\",\"{senton}\",\"{receivedtime}\",\"{customer}\",\"{room}\",\"{model}\",\"{axedasn}\",\"{date}\",\"{state}\",\"{japan_time}\",\"{alert_level}\",\"{alert_message}\"", file=fw)
+            print(f"\"{subject}\",\"{senton}\",\"{receivedtime}\",\"\",\"\",\"{model}\",\"{axedasn}\",\"{date}\",\"{state}\",\"{japan_time}\",\"{alert_level}\",\"{alert_message}\"", file=fw)
     fw.close()
     print('メール情報をoutput.csvにエクスポートしました。')
 
     # アラート情報の出力
+    """
     fw = open("output_alert.csv", "w", encoding="utf-8")
     print("Axeda S/N,Model,Alert Name,Alert Dates(JST)", file=fw)
     for key_axedasn, value_model in _assetDic.items():
@@ -336,6 +389,7 @@ def main():
                 print(f"\"{key_axedasn}\",\"{value_model.Name}\",\"{alert_name}\",\"{alert_date}\"", file=fw)
     fw.close()
     print('アラート情報をoutput_alert.csvにエクスポートしました。')
+    """
 
 if __name__=='__main__':
 
