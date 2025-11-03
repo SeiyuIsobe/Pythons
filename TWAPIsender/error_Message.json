@@ -1,0 +1,52 @@
+{
+  "values": {
+    "dataShape": {
+      "fieldDefinitions": {
+        "name": {
+          "name": "name",
+          "aspects": {
+            "isPrimaryKey": true
+          },
+          "description": "Property name",
+          "baseType": "STRING",
+          "ordinal": 0
+        },
+        "time": {
+          "name": "time",
+          "aspects": {},
+          "description": "time",
+          "baseType": "DATETIME",
+          "ordinal": 0
+        },
+        "value": {
+          "name": "value",
+          "aspects": {},
+          "description": "value",
+          "baseType": "VARIANT",
+          "ordinal": 0
+        },
+        "quality": {
+          "name": "quality",
+          "aspects": {},
+          "description": "quality",
+          "baseType": "STRING",
+          "ordinal": 0
+        }
+      }
+    },
+    "rows": [
+      {
+        "name": "ECP_F_Error_Level",
+        "time": "2025-08-23T09:00:00Z",
+        "value": "5",
+        "quality": "GOOD"
+      },
+      {
+        "name": "ECP_F_Error_Message",
+        "time": "2025-08-23T09:00:01Z",
+        "value": "isobe error",
+        "quality": "GOOD"
+      }
+    ]
+  }
+}
