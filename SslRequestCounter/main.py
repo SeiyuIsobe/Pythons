@@ -3,6 +3,7 @@ import re
 import csv
 from collections import defaultdict
 from datetime import datetime
+import time
 
 """
 [04/Jan/2024:05:43:03 +0900] 114.152.126.184 TLSv1.2 AES128-SHA "POST /eMessage HTTP/1.1" 265
@@ -159,4 +160,11 @@ if __name__=='__main__':
     # 実行フォルダ（main.pyがあるフォルダ）
     _main_path = os.path.dirname(os.path.abspath(__file__))
 
+    # 計測開始
+    start_time = time.time()
+
     main()
+
+    # 計測終了
+    end_time = time.time()
+    print(f"処理時間: {end_time - start_time:.2f}秒")
